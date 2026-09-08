@@ -1,0 +1,87 @@
+[
+  {
+    "user_id": 1,
+    "event_type": "page_view",
+    "timestamp": "2023-10-26T10:00:15Z",
+    "details": {
+      "page_url": "/home",
+      "referrer": null,
+      "duration_ms": 5000
+    }
+  },
+  {
+    "user_id": 2,
+    "event_type": "app_open",
+    "timestamp": "2023-10-26T10:05:30Z",
+    "details": {}
+  },
+  {
+    "user_id": 1,
+    "event_type": "button_click",
+    "timestamp": "2023-10-26T10:06:45Z",
+    "details": {
+      "button_id": "buy_now_button",
+      "page_url": "/product/xyz"
+    }
+  },
+  {
+    "user_id": 3,
+    "event_type": "page_view",
+    "timestamp": "2023-10-26T10:10:00Z",
+    "details": {
+      "page_url": "/category/electronics",
+      "duration_ms": 15000
+    }
+  },
+  {
+    "user_id": 4,
+    "event_type": "page_view",
+    "timestamp": "2023-10-26T10:12:20Z",
+    "details": {
+      "page_url": "/about_us"
+    }
+  },
+  {
+    "user_id": 2,
+    "event_type": "purchase",
+    "timestamp": "2023-10-26T10:20:00Z",
+    "details": {
+      "item_id": "item_abc",
+      "price": 1200000,
+      "quantity": 1,
+      "currency": "IRR"
+    }
+  },
+  {
+    "user_id": 1,
+    "event_type": "page_view",
+    "timestamp": "2023-10-26T10:25:10Z",
+    "details": {
+      "page_url": "/cart",
+      "item_count": 1
+    }
+  },
+  {
+    "user_id": 5,
+    "event_type": "app_open",
+    "timestamp": "2023-10-26T10:30:55Z",
+    "details": {}
+  },
+  {
+    "user_id": 3,
+    "event_type": "button_click",
+    "timestamp": "2023-10-26T10:35:00Z",
+    "details": {
+      "button_id": "filter_button",
+      "filter_param": "price_low_to_high"
+    }
+  },
+    {
+    "user_id": 1,
+    "event_type": "app_close",
+    "timestamp": "2023-10-26T10:40:00Z",
+    "details": {
+      "duration_session_ms": 2400000
+    }
+  }
+]

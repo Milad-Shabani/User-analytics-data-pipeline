@@ -1,0 +1,21 @@
+# Zero-setup mode: `docker compose up pipeline` runs the pipeline against the
+# bundled sample data using SQLite — no other services required.
+#
+# To try it against a real SQL Server target instead, uncomment the `sqlserver`
+# service below and set DB_BACKEND=mssql (see .env.example).
+services:
+  pipeline:
+    build: .
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DB_BACKEND=${DB_BACKEND:-sqlite}
+      - SQLITE_PATH=/app/data/processed/warehouse.db
+
+  # sqlserver:
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   environment:
+  #     - ACCEPT_EULA=Y
+  #     - MSSQL_SA_PASSWORD=${MSSQL_PASSWORD:-Your_password123}
+  #   ports:
+  #     - "1433:1433"

@@ -1,0 +1,37 @@
+# Central configuration for the pipeline.
+# Values here can be overridden by environment variables (see .env.example).
+
+paths:
+  profiles_glob: "data/raw/profiles/*.csv"
+  events_glob: "data/raw/events/user_events_*.json"
+  processed_dir: "data/processed"
+  parquet_dir: "data/processed/user_activity_parquet"
+
+pipeline:
+  # Columns pulled out of the flexible `details` JSON blob into first-class
+  # analytical columns. Anything else stays inside `details_raw`.
+  detail_fields:
+    - page_url
+    - referrer
+    - duration_ms
+    - button_id
+    - filter_param
+    - item_id
+    - price
+    - quantity
+    - currency
+    - item_count
+    - duration_session_ms
+
+  # Event types the quality layer expects to see at least once per run.
+  # Unexpected event types are not rejected, just flagged in the quality report.
+  known_event_types:
+    - page_view
+    - app_open
+    - app_close
+    - button_click
+    - purchase
+
+quality:
+  max_orphan_event_ratio: 0.05   # fail the run if >5% of events can't be matched to a profile
+  max_null_timestamp_ratio: 0.0  # fail the run if any event is missing a timestamp
