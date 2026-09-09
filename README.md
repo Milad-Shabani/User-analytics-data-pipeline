@@ -1,4 +1,4 @@
-# Realtime User Analytics Pipeline
+# User Analytics Data Pipeline
 
 [![CI](https://github.com/Milad-Shabani/realtime-user-analytics-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Milad-Shabani/realtime-user-analytics-pipeline/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
