@@ -1,6 +1,6 @@
 # User Analytics Data Pipeline
 
-[![CI](https://github.com/Milad-Shabani/realtime-user-analytics-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Milad-Shabani/realtime-user-analytics-pipeline/actions/workflows/ci.yml)
+[![CI](https://github.com/Milad-Shabani/User-analytics-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Milad-Shabani/User-analytics-data-pipeline/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -27,20 +27,109 @@ Built as a portfolio implementation of the problem described in
 
 ## Architecture
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full diagram and
-design rationale. In short:
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design
+rationale.
 
+### Pipeline flow
+
+```mermaid
+flowchart LR
+    subgraph SRC["📥 Sources"]
+        CSV[("user_profiles.csv<br/>CRM export")]
+        JSON[("user_events_YYYYMMDD.json<br/>daily event drop")]
+    end
+
+    subgraph EXT["Extract"]
+        EP["extract.profiles<br/>defensive CSV parsing<br/>row-level validation"]
+        EE["extract.events<br/>JSON parsing<br/>timestamp & required-field checks"]
+    end
+
+    subgraph TRF["Transform"]
+        TR["transform.transformer<br/>left join on user_id<br/>flatten details → columns<br/>derive event_date<br/>deterministic event_id"]
+    end
+
+    subgraph QLT["Quality gate"]
+        QG{"orphan ratio ≤ 5%<br/>null timestamps = 0<br/>(config.yaml)"}
+    end
+
+    subgraph LOAD["Load"]
+        WH[("Warehouse<br/>dim_user_profiles<br/>fact_user_activity<br/>SQLite / SQL Server / Postgres")]
+        PQ[("Parquet<br/>partitioned by event_date")]
+    end
+
+    REJ["rejected-row report"]
+    FAIL["❌ run stops<br/>quality report + non-zero exit"]
+    BI["📊 Power BI / BI tools"]
+
+    CSV --> EP --> TR
+    JSON --> EE --> TR
+    EP -.-> REJ
+    EE -.-> REJ
+    TR --> QG
+    QG -- pass --> WH
+    QG -- pass --> PQ
+    QG -- fail --> FAIL
+    WH --> BI
+    PQ --> BI
 ```
-CSV ──► extract.profiles ──┐
-                            ├──► transform (join, flatten, event_id) ──► quality gate ──► warehouse + partitioned Parquet
-JSON ─► extract.events ────┘
+
+### What happens during a single run
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User / CI
+    participant CLI as cli.py
+    participant P as pipeline.py
+    participant X as extract
+    participant T as transform
+    participant Q as quality
+    participant W as load.warehouse
+    participant PQ as load.parquet_writer
+
+    U->>CLI: python -m analytics_pipeline.cli run
+    CLI->>P: run_pipeline(config, fail_on_quality)
+    P->>X: extract_profiles(profiles_glob)
+    X-->>P: profiles + per-file reports
+    P->>X: extract_events(events_glob)
+    X-->>P: events + per-file reports
+    P->>T: build_fact_table(profiles, events, detail_fields)
+    T-->>P: fact table
+    P->>Q: run_quality_checks(fact, thresholds, known_event_types)
+    Q-->>P: QualityReport
+    alt quality failed and fail_on_quality
+        P--xCLI: RuntimeError - Quality gate failed
+    else passed, or --no-fail-on-quality
+        P->>W: write_profiles → dim_user_profiles (replace)
+        P->>W: write_fact → fact_user_activity (upsert on event_id)
+        P->>PQ: write_partitioned_parquet(partition by event_date)
+        P-->>CLI: PipelineResult
+        CLI-->>U: Done - profiles, events, fact rows, quality status
+    end
+```
+
+### Idempotent re-runs
+
+Because `event_id` is derived from the event itself rather than generated
+randomly, processing the same file twice updates rows instead of duplicating
+them (SQLite load path; SQL Server/Postgres currently append — see
+*Possible next steps*).
+
+```mermaid
+flowchart LR
+    A["Event row<br/>user_id · timestamp · event_type<br/>source_file · row position"] --> H["SHA-1 hash<br/>→ 16-char event_id"]
+    H --> C{"event_id already in<br/>fact_user_activity?"}
+    C -- no --> I["INSERT new row"]
+    C -- yes --> UPD["UPDATE existing row<br/>ON CONFLICT DO UPDATE"]
+    I --> R["✅ no duplicates on<br/>retries or backfills"]
+    UPD --> R
 ```
 
 ## Quickstart
 
 ```bash
-git clone https://github.com/Milad-Shabani/realtime-user-analytics-pipeline.git
-cd realtime-user-analytics-pipeline
+git clone https://github.com/Milad-Shabani/User-analytics-data-pipeline.git
+cd User-analytics-data-pipeline
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]" 2>/dev/null || { pip install -r requirements-dev.txt && pip install -e .; }
 
@@ -73,6 +162,14 @@ This drops a second synthetic day of events into `data/raw/events/` and
 re-runs the pipeline, producing a second `event_date=...` Parquet partition —
 demonstrating the incremental, multi-day behaviour the design targets.
 
+```mermaid
+flowchart LR
+    D1["user_events_20231026.json"] --> RUN(("pipeline<br/>run"))
+    D2["user_events_20231027.json"] --> RUN
+    RUN --> P1["user_activity_parquet/<br/>event_date=2023-10-26/"]
+    RUN --> P2["user_activity_parquet/<br/>event_date=2023-10-27/"]
+```
+
 ### Docker
 
 ```bash
@@ -93,6 +190,17 @@ pytest -v --cov=analytics_pipeline
 Covers the CSV/JSON extraction edge cases, the join/flatten/event_id
 transform logic, and the quality gate's pass/fail thresholds.
 
+The same checks run in GitHub Actions on every push and pull request to `main`:
+
+```mermaid
+flowchart LR
+    GH["push / PR to main"] --> M["matrix<br/>Python 3.10 · 3.11 · 3.12"]
+    M --> INS["install<br/>requirements-dev + package"]
+    INS --> LINT["lint<br/>flake8 + black --check"]
+    LINT --> TEST["pytest<br/>+ coverage"]
+    TEST --> SMOKE["CLI smoke run<br/>on bundled sample data"]
+```
+
 ## Data model
 
 See [`docs/DATA_DICTIONARY.md`](docs/DATA_DICTIONARY.md) for full column
@@ -100,6 +208,41 @@ definitions of `dim_user_profiles` and `fact_user_activity` — the latter is
 built to be dropped straight into a Power BI model (import or DirectQuery
 against the warehouse table, or via the Parquet files) as a standard
 star-schema fact table.
+
+```mermaid
+erDiagram
+    DIM_USER_PROFILES |o--o{ FACT_USER_ACTIVITY : "user_id (left join)"
+
+    DIM_USER_PROFILES {
+        int user_id PK
+        string name
+        date registration_date
+        string location
+    }
+
+    FACT_USER_ACTIVITY {
+        string event_id PK "deterministic hash"
+        int user_id FK "may have no matching profile"
+        string name "null for orphan events"
+        string location
+        date registration_date
+        string event_type
+        datetime timestamp "UTC"
+        date event_date "Parquet partition key"
+        string details_raw "original JSON payload"
+        string page_url
+        string referrer
+        int duration_ms
+        string button_id
+        string filter_param
+        string item_id
+        float price
+        int quantity
+        string currency
+        int item_count
+        int duration_session_ms
+    }
+```
 
 ## Possible next steps
 
