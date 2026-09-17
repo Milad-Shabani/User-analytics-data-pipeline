@@ -12,3 +12,4 @@ warehouse.db
 .coverage
 htmlcov/
 .DS_Store
+*.draft.md
